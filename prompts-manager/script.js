@@ -19,6 +19,8 @@ const elements = {
     btnSave: document.querySelector('#btn-save'),
     list: document.querySelector('.prompt-list'),
     search: document.querySelector('#search-input'),
+    btnNew: document.querySelector('#btn-new'),
+    btnCopy: document.querySelector('#btn-copy'),
 }
 
 function updateEditableWrapperState(element, wrapper) {
@@ -47,13 +49,13 @@ function attachAllEditableHandlers() {
 // funcoes para abrir e fechar a sidebar
 
 function openSidebar() {
-    elements.sidebar.style.display = 'flex'
-    elements.btnOpen.style.display = 'none'
+    elements.sidebar.classList.add('open')
+    elements.sidebar.classList.remove('collapsed')
 }
 
 function closeSidebar() {
-    elements.sidebar.style.display = 'none'
-    elements.btnOpen.style.display = 'block'
+    elements.sidebar.classList.remove('open')
+    elements.sidebar.classList.add('collapsed')
 }
 
 // salvar prompt
@@ -69,6 +71,12 @@ function save() {
 
     if (state.selectedID) {
         // Editando um prompt existente
+        const existingPrompt = state.prompts.find(p => p.id === state.selectedID)
+        
+        if (existingPrompt) {
+            existingPrompt.title = title || 'Sem Titulo'
+            existingPrompt.content = content || 'Sem Conteudo'
+        }
 
     } else {
         // Criando um novo prompt
@@ -82,6 +90,7 @@ function save() {
         state.selectedID = newPrompt.id
     }
 
+    renderList(elements.search.value)
     persist()
 }
 
@@ -89,7 +98,6 @@ function save() {
 function persist() {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state.prompts)) // setItem precisa de 2 infos: a chave e o valor
-        alert('Prompt salvo com sucesso!')
     } catch (error) {
         console.log('Erro ao salvar no localStorage:', error)
     }
@@ -109,11 +117,16 @@ function load() {
 
 // listando os prompts na sidebar
 function createPromptItem(prompt) {
+    const tmpContent = document.createElement('div')
+    const tmpTitle = document.createElement('div')
+    tmpContent.innerHTML = prompt.content
+    tmpTitle.innerHTML = prompt.title
+
     return `
     <li class="prompt-item" data-id="${prompt.id}" data-action="select">
         <div class="prompt-item-content">
-            <span class="prompt-item-title">${prompt.title}</span>
-            <span class="prompt-item-description">${prompt.content}</span>
+            <span class="prompt-item-title">${tmpTitle.textContent}</span>
+            <span class="prompt-item-description">${tmpContent.textContent}</span>
         </div>
         <button class="btn-icon" title="Remover" data-action="remove">
             <img src="assets/remove.svg" class="icon icon-trash" alt="Remover">
@@ -125,37 +138,75 @@ function createPromptItem(prompt) {
 // renderizando / pesquisa na lista
 function renderList(filterText = '') {
     const filteredPrompts = state.prompts.filter(prompt => prompt.title.toLowerCase().includes(filterText.toLowerCase().trim())).map(p => createPromptItem(p)).join('')
+    // Ou seja, para cada prompt que passou pelo filtro, ele gera um trecho de HTML correspondente usando createPromptItem.
+    // O resultado é um array de strings HTML, que depois é unido em uma única string com .join('') para ser exibido na tela.
 
     elements.list.innerHTML = filteredPrompts
 }
 
+function addNewPrompt() {
+    state.selectedID = null
+    elements.promptTitle.textContent = ''
+    elements.promptContent.textContent = ''
+    updateAllEditableStates()
+    elements.promptTitle.focus()
+}
+
+function copySelected() {
+    try {
+        const content = elements.promptContent
+        
+        if (!navigator.clipboard) {
+            console.log('API de area de transferencia nao suportada')
+            return
+        }
+        
+        navigator.clipboard.writeText(content.innerText)
+
+        alert('Conteudo copiado para a area de transferencia!  ')
+    } catch (error) {
+        console.log('Erro ao copiar para a area de transferencia:', error)
+    }
+}
+
 // evento para salvar
 elements.btnSave.addEventListener('click', save)
+
+// novo botao
+elements.btnNew.addEventListener('click', addNewPrompt)
 
 // evento para buscar
 elements.search.addEventListener('input', function (e) {
     renderList(e.target.value)
 })
 
+// copiar prompt
+elements.btnCopy.addEventListener('click', copySelected)
+
 // selecionar prompt
 elements.list.addEventListener('click', function (e) {
     const removeBtn = e.target.closest('[data-action="remove"]')
     const item = e.target.closest('[data-id]')
-    
     if (!item) return
 
     const id = item.getAttribute('data-id')
-    console.log(id)
+    state.selectedID = id
 
     if (removeBtn) {
-        // ação futura de remover
+        // retorna filtrado todos os prompts, desde que eles sejam diferentes do id que queremos remover
+
+        // novo array sem o prompt removido
+        state.prompts = state.prompts.filter(p => p.id !== id)
+        renderList(elements.search.value)
+        persist()
         return
     } else if (e.target.closest('[data-action="select"]')) {
-        const prompt = state.prompts.find(p => p.id === id)
+        const prompt = state.prompts.find(p => p.id === id) 
+        // O método .find() procura o objeto cujo p.id seja igual ao valor da variável id. Então, a const prompt será o objeto completo do prompt
         
         if (prompt){
             elements.promptTitle.textContent = prompt.title
-            elements.promptContent.textContent = prompt.content
+            elements.promptContent.innerHTML = prompt.content
             updateAllEditableStates()
         }
     }
